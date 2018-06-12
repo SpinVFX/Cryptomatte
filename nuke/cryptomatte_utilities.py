@@ -4,36 +4,39 @@
 #  See license.txt
 #
 #
+import nuke
+import struct
 
 __version__ = "1.2.0"
 
 GIZMO_CHANNEL_KNOBS = [
-    "in00", "in01", "in02", "in03", 
+    "in00", "in01", "in02", "in03",
     "in04", "in05", "in06", "in07"
 ]
 GIZMO_REMOVE_CHANNEL_KNOBS = [
-    "remove00", "remove01", "remove02", "remove03", 
+    "remove00", "remove01", "remove02", "remove03",
     "remove04", "remove05", "remove06", "remove07"
 ]
 GIZMO_ADD_CHANNEL_KNOBS = [
-    "add00", "add01", "add02", "add03", 
+    "add00", "add01", "add02", "add03",
     "add04", "add05", "add06", "add07"
 ]
 
 CRYPTO_METADATA_LEGAL_PREFIX = ["exr/cryptomatte/", "cryptomatte/"]
 CRYPTO_METADATA_DEFAULT_PREFIX = CRYPTO_METADATA_LEGAL_PREFIX[1]
 
-import nuke
-import struct
 
 def setup_cryptomatte_ui():
     if nuke.GUI:
         toolbar = nuke.menu("Nodes")
-        automatte_menu = toolbar.addMenu("Cryptomatte", "cryptomatte_logo.png",index=-1)
+        automatte_menu = toolbar.addMenu("Cryptomatte", "cryptomatte_logo.png", index=-1)
         automatte_menu.addCommand("Cryptomatte", "import cryptomatte_utilities as cu; cu.cryptomatte_create_gizmo();")
         automatte_menu.addCommand("Decryptomatte All", "import cryptomatte_utilities as cu; cu.decryptomatte_all();")
-        automatte_menu.addCommand("Decryptomatte Selection", "import cryptomatte_utilities as cu; cu.decryptomatte_selected();")
-        automatte_menu.addCommand("Encryptomatte", "import cryptomatte_utilities as cu; cu.encryptomatte_create_gizmo();")
+        automatte_menu.addCommand("Decryptomatte Selection",
+                                  "import cryptomatte_utilities as cu; cu.decryptomatte_selected();")
+        automatte_menu.addCommand("Encryptomatte",
+                                  "import cryptomatte_utilities as cu; cu.encryptomatte_create_gizmo();")
+
 
 def setup_cryptomatte():
     nuke.addKnobChanged(lambda: cryptomatte_knob_changed_event(
@@ -61,11 +64,11 @@ class CryptomatteTesting(object):
 
     def get_all_unit_tests(self, test_filter=""):
         import cryptomatte_utilities_tests as cu_tests
-        return cu_tests.get_all_unit_tests(test_filter=test_filter)
+        return cu_tests.get_all_unit_tests()
 
     def get_all_nuke_tests(self, test_filter=""):
         import cryptomatte_utilities_tests as cu_tests
-        return cu_tests.get_all_nuke_tests(test_filter=test_filter)
+        return cu_tests.get_all_nuke_tests()
 
     def run_unit_tests(self, test_filter="", failfast=False):
         import cryptomatte_utilities_tests as cu_tests
@@ -74,6 +77,7 @@ class CryptomatteTesting(object):
     def run_nuke_tests(self, test_filter="", failfast=False):
         import cryptomatte_utilities_tests as cu_tests
         return cu_tests.run_nuke_tests(test_filter, failfast)
+
 
 tests = CryptomatteTesting()
 
@@ -88,12 +92,13 @@ except ImportError:
     # ... otherwise fallback to the pure python version
     import pymmh3 as mmh3
 
+
 def mm3hash_float(name):
     hash_32 = mmh3.hash(name)
-    exp = hash_32 >> 23 & 255 
+    exp = hash_32 >> 23 & 255
     if (exp == 0) or (exp == 255):
-        hash_32 ^= 1 << 23 
-      
+        hash_32 ^= 1 << 23
+
     packed = struct.pack('<L', hash_32 & 0xffffffff)
     return struct.unpack('<f', packed)[0]
 
@@ -104,6 +109,7 @@ def single_precision(float_in):
 
 
 def id_to_rgb(id):
+    # FIXME: Shadows built in name 'id'
     # This takes the hashed id and converts it to a preview color
 
     import ctypes
@@ -112,18 +118,19 @@ def id_to_rgb(id):
     mask = 2 ** 32 - 1
     return [0.0, float((bits << 8) & mask) / float(mask), float((bits << 16) & mask) / float(mask)]
 
+
 def id_to_hex(id):
+    # FIXME: Shadows built in name 'id'
     return "{0:08x}".format(struct.unpack('<I', struct.pack('<f', id))[0])
+
 
 def layer_hash(layer_name):
     return id_to_hex(mm3hash_float(layer_name))[:-1]
 
+
 #############################################
 # Cryptomatte file processing
 ############################################# 
-
-global g_cryptomatte_manf_from_names
-global g_cryptomatte_manf_from_IDs
 
 g_cryptomatte_manf_from_names = {}
 g_cryptomatte_manf_from_IDs = {}
@@ -145,14 +152,14 @@ class CryptomatteInfo(object):
         exr_metadata_dict = node_in.metadata() or {}
 
         default_selection = None
-        
+
         for key, value in exr_metadata_dict.iteritems():
             if key == "input/filename":
                 self.filename = value
             for prefix in CRYPTO_METADATA_LEGAL_PREFIX:
                 if not key.startswith(prefix):
                     continue
-                numbered_key = key[len(prefix):] # ex: "exr/cryptomatte/ae93ba3/name" --> "ae93ba3/name"
+                numbered_key = key[len(prefix):]  # ex: "exr/cryptomatte/ae93ba3/name" --> "ae93ba3/name"
                 metadata_id = numbered_key.split("/")[0]  # ex: "ae93ba3/name" --> ae93ba3
                 partial_key = numbered_key.split("/")[1]  # ex: "ae93ba3/name" --> "name"
                 if metadata_id not in self.cryptomattes:
@@ -165,7 +172,7 @@ class CryptomatteInfo(object):
             default_selection = sorted(self.cryptomattes.keys(), key=lambda x: self.cryptomattes[x]['name'])[0]
 
         for metadata_id, value in self.cryptomattes.iteritems():
-            name = value.get("name", "") 
+            name = value.get("name", "")
             channels = self._identify_channels(name)
             self.cryptomattes[metadata_id]["channels"] = channels
 
@@ -235,7 +242,7 @@ class CryptomatteInfo(object):
             if not channel.endswith(suffix):
                 continue
             pure_channel = channel[:-len(suffix)]
-            if pure_channel != name: # ignore the human readable ones
+            if pure_channel != name:  # ignore the human readable ones
                 pure_channels.append(pure_channel)
 
         return sorted(pure_channels)
@@ -244,7 +251,7 @@ class CryptomatteInfo(object):
         import os
         if "\\" in sidecar_path:
             print "Cryptomatte: Invalid sidecar path (Back-slashes not allowed): ", sidecar_path
-            return "" # to enforce the specification. 
+            return ""  # to enforce the specification.
         joined = os.path.join(os.path.dirname(exr_path), sidecar_path)
         return os.path.normpath(joined)
 
@@ -287,9 +294,9 @@ class CryptomatteInfo(object):
         unpacker = struct.Struct('=f')
         packer = struct.Struct("=I")
         for name, value in manifest.iteritems():
-            packed = packer.pack(int(value,16))
+            packed = packer.pack(int(value, 16))
             packed = packed = '\0' * (4 - len(packed)) + packed
-            id_float = unpacker.unpack( packed )[0]
+            id_float = unpacker.unpack(packed)[0]
             name_str = name.encode("utf8")
             from_names[name_str] = id_float
             from_ids[id_float] = name_str
@@ -311,9 +318,9 @@ class CryptomatteInfo(object):
         """
         global g_cryptomatte_manf_from_IDs
         manf_cache = g_cryptomatte_manf_from_IDs
-        if (type(manf_cache) is dict and ID_value in manf_cache):
+        if type(manf_cache) is dict and ID_value in manf_cache:
             return g_cryptomatte_manf_from_IDs[ID_value]
-        elif self.selection != None:
+        elif self.selection is not None:
             self.parse_manifest()
             return self.cryptomattes[self.selection]["ids_to_names"].get(ID_value, None)
         else:
@@ -322,7 +329,7 @@ class CryptomatteInfo(object):
     def name_to_ID(self, name):
         return mm3hash_float(name)
 
-    def test_manifest(self, quiet=False):        
+    def test_manifest(self, quiet=False):
         """Testing function to check for implementation errors and hash collisions.
         Checks all names and values in the manifest in the manifest by rehashing them,
         to ensure that the entire process is sound. Also finds collisions. Returns a tuple
@@ -353,7 +360,7 @@ class CryptomatteInfo(object):
 def print_hash_info(name):
     hash_32 = mmh3.hash(name)
     print "Name:", name
-    print "UTF-8 bytes:", " ".join( hex(ord(x))[2:] for x in name)
+    print "UTF-8 bytes:", " ".join(hex(ord(x))[2:] for x in name)
     print "Hash value (signed):", hash_32
     if hash_32 < 0:
         hash_32 = (-hash_32 - 1) ^ 0xFFFFFFFF
@@ -367,7 +374,7 @@ def print_hash_info(name):
 
 
 def cryptomatte_create_gizmo():
-    return nuke.createNode("Cryptomatte") 
+    return nuke.createNode("Cryptomatte")
 
 
 def encryptomatte_create_gizmo():
@@ -379,10 +386,10 @@ def encryptomatte_create_gizmo():
 #############################################
 
 
-def cryptomatte_knob_changed_event(node = None, knob = None):
+def cryptomatte_knob_changed_event(node=None, knob=None):
     if knob.name() == "inputChange":
         if unsafe_to_do_inputChange(node):
-            return # see comment in #unsafe_to_do_inputChange. 
+            return  # see comment in #unsafe_to_do_inputChange.
         cinfo = CryptomatteInfo(node)
         _update_cryptomatte_gizmo(node, cinfo)
     elif knob.name() in ["cryptoLayer", "cryptoLayerLock"]:
@@ -396,7 +403,7 @@ def cryptomatte_knob_changed_event(node = None, knob = None):
                 node.knob('cryptoLayer').setValue(new_crypto_layer)
                 cinfo = CryptomatteInfo(node)
                 _update_cryptomatte_gizmo(node, cinfo)
-        
+
         # Undo user action
         knob.setValue(knob.values().index(node.knob('cryptoLayer').value()))
     elif knob.name() == "pickerAdd":
@@ -419,7 +426,7 @@ def cryptomatte_knob_changed_event(node = None, knob = None):
         keyed_object = cinfo.id_to_name(ID_value) or "<%s>" % ID_value
         node.knob("pickerAdd").setValue([0] * 8)
         _matteList_modify(node, keyed_object, True)
-        _update_cryptomatte_gizmo(node, cinfo)  
+        _update_cryptomatte_gizmo(node, cinfo)
 
     elif knob.name() == "matteList":
         cinfo = CryptomatteInfo(node)
@@ -444,13 +451,13 @@ def encryptomatte_knob_changed_event(node=None, knob=None):
     if knob.name() in ["setupLayers", "cryptoLayer", "inputChange", "cryptoLayers"]:
         if knob.name() == "inputChange":
             if unsafe_to_do_inputChange(node):
-                return # see comment in #unsafe_to_do_inputChange. 
+                return  # see comment in #unsafe_to_do_inputChange.
         _update_encyptomatte_setup_layers(node)
         cinfo = CryptomatteInfo(node)
         _update_encryptomatte_gizmo(node, cinfo)
 
 
-def encryptomatte_on_create_event(node = None, knob = None):
+def encryptomatte_on_create_event(node=None, knob=None):
     node.knob('cryptoLayers').setEnabled(node.knob('setupLayers').value())
 
 
@@ -487,6 +494,7 @@ def update_encryptomatte_gizmo(node, force=False):
 
 def clear_encryptomatte_gizmo(node):
     node.knob("matteName").setValue("")
+    cinfo = CryptomatteInfo(node)
     _update_encryptomatte_gizmo(node, cinfo, True)
 
 
@@ -502,7 +510,7 @@ def _cancel_update(gizmo, force):
     except:
         # This happens sometimes on creation. I don't really get it, but this seems to fix it.
         return True
-    if (not force and stopAutoUpdate == 1.0): 
+    if not force and stopAutoUpdate == 1.0:
         return True
     else:
         return False
@@ -545,11 +553,13 @@ def _set_channels(gizmo, channels, layer_name, default="none"):
         channel = channels[i] if i < len(channels) else default
         gizmo.knob(knob_name).setValue(channel)
 
+
 def _set_crypto_layer_choice(gizmo, cinfo):
     choice_knob = gizmo.knob("cryptoLayerChoice")
     values = sorted([v.get('name', '') for v in cinfo.cryptomattes.values()])
     choice_knob.setValues(values)
     choice_knob.setValue(values.index(cinfo.get_selection_name()))
+
 
 def _update_cryptomatte_gizmo(gizmo, cinfo, force=False):
     if _cancel_update(gizmo, force):
@@ -574,11 +584,11 @@ def _set_ui(gizmo):
 def _update_encryptomatte_gizmo(gizmo, cinfo, force=False):
     if _cancel_update(gizmo, force):
         return
-    
+
     matte_name = gizmo.knob('matteName').value()
     matte_input = gizmo.input(1)
 
-    if matte_name == "" and not matte_input is None:
+    if matte_name == "" and matte_input is not None:
         matte_name = matte_input.name()
         gizmo.knob('matteName').setValue(matte_name)
 
@@ -615,7 +625,7 @@ def _update_encryptomatte_gizmo(gizmo, cinfo, force=False):
             gizmo.knob('newLayer').setValue(True)
 
         cryptomatte_channels = [
-            crypto_layer + "{0:02d}".format(i) 
+            crypto_layer + "{0:02d}".format(i)
             for i in range(int(gizmo.knob('cryptoLayers').value()))
         ]
         _set_channels(gizmo, cryptomatte_channels, crypto_layer)
@@ -636,7 +646,8 @@ def _update_encryptomatte_gizmo(gizmo, cinfo, force=False):
         manifest_key = cinfo.get_selection_metadata_key("")
         gizmo.knob('manifestKey').setValue(manifest_key)
 
-    gizmo.knob("alphaExpression").setValue(_build_extraction_expression(cryptomatte_channels, [0.0]))    
+    gizmo.knob("alphaExpression").setValue(_build_extraction_expression(cryptomatte_channels, [0.0]))
+
 
 def _update_encyptomatte_setup_layers(gizmo):
     setup_layers = gizmo.knob('setupLayers').value()
@@ -659,7 +670,7 @@ def _update_encyptomatte_setup_layers(gizmo):
         this_layer = "{0}{1:02d}".format(crypto_layer, i)
         # Add
         if i < num_layers:
-            if not this_layer in all_layers:
+            if this_layer not in all_layers:
                 channels = ["%s.%s" % (this_layer, c) for c in ['red', 'green', 'blue', 'alpha']]
                 nuke.Layer(this_layer, channels)
 
@@ -671,6 +682,7 @@ def _update_encyptomatte_setup_layers(gizmo):
                 gizmo.knob(ch_remove).setValue(this_layer)
             else:
                 gizmo.knob(ch_remove).setValue("none")
+
 
 def encryptomatte_add_manifest_id():
     node = nuke.thisNode()
@@ -711,14 +723,16 @@ def unload_manifest(node):
         nuke.message("Gizmo's cryptomatte selection is not valid or no cryptomattes are available. ")
         return
 
-    names_to_IDs = cinfo.parse_manifest();
+    names_to_IDs = cinfo.parse_manifest()
 
     if not names_to_IDs:
         nuke.message('No Cryptomatte manifest was found in the input. ')
         return
 
     new_keyers = []
-    if nuke.ask('There are %s named mattes in the manifest, are you sure you want to create keyer nodes for all of them?' % len(names_to_IDs)):
+    if nuke.ask(
+            'There are %s named mattes in the manifest, are you sure you want to create keyer nodes for all of them?' % len(
+                    names_to_IDs)):
         with nuke.root():
             dot = nuke.nodes.Dot()
             dot.setInput(0, source_node)
@@ -729,7 +743,7 @@ def unload_manifest(node):
                 if task.isCancelled():
                     break
                 task.setMessage("Creating Cryptomatte Keyer for %s" % name)
-                task.setProgress( int(float(progress) / float(len(names_to_IDs)) * 100))
+                task.setProgress(int(float(progress) / float(len(names_to_IDs)) * 100))
                 keyer = nuke.nodes.Cryptomatte(name="ck_%s" % name, matteList=name, matteOnly=True)
                 keyer.setInput(0, dot)
                 _update_cryptomatte_gizmo(keyer, cinfo)
@@ -753,7 +767,6 @@ def _is_number(s):
 
 
 def _set_expression(gizmo, cryptomatte_channels):
-    matte_list_str = gizmo.knob("matteList").getValue()
     ID_list = []
 
     matte_list = get_mattelist_as_set(gizmo)
@@ -761,7 +774,7 @@ def _set_expression(gizmo, cryptomatte_channels):
     for item in matte_list:
         if item.startswith("<") and item.endswith(">"):
             numstr = item[1:-1]
-            if _is_number(numstr): 
+            if _is_number(numstr):
                 ID_list.append(single_precision(float(numstr)))
         else:
             ID_list.append(mm3hash_float(item))
@@ -773,17 +786,17 @@ def _set_expression(gizmo, cryptomatte_channels):
 def _build_condition(condition, IDs):
     conditions = []
     for ID in IDs:
-        conditions.append( condition.replace("ID", str(ID)) )
+        conditions.append(condition.replace("ID", str(ID)))
     return " || ".join(conditions)
 
 
 def _build_extraction_expression(channel_list, IDs):
     if not IDs:
         return ""
-        
+
     iterated_expression = "({red_condition} ? sub_channel.green : 0.0) + ({blue_condition} ? sub_channel.alpha : 0.0) + more_work_needed"
-    
-    subcondition_red =  "sub_channel.red == ID"
+
+    subcondition_red = "sub_channel.red == ID"
     subcondition_blue = "sub_channel.blue == ID"
 
     expression = ""
@@ -791,7 +804,8 @@ def _build_extraction_expression(channel_list, IDs):
         condition_r = _build_condition(subcondition_red, IDs)
         condition_b = _build_condition(subcondition_blue, IDs)
 
-        channel_expression = iterated_expression.replace("red_condition", condition_r).replace("blue_condition", condition_b)
+        channel_expression = iterated_expression.replace("red_condition", condition_r).replace("blue_condition",
+                                                                                               condition_b)
         channel_expression = channel_expression.replace("sub_channel", channel)
 
         if not expression:
@@ -804,6 +818,7 @@ def _build_extraction_expression(channel_list, IDs):
     expression = expression.replace("}", ")")
 
     return expression
+
 
 def _set_preview_expression(gizmo, cryptomatte_channels):
     enabled = gizmo.knob('previewEnabled').getValue()
@@ -860,8 +875,7 @@ def _set_preview_expression(gizmo, cryptomatte_channels):
         expressions = ["", "", "", ""]
     for i in range(4):
         gizmo.knob('previewExpression' + str(i)).setValue(expressions[i])
-    
-    
+
 
 #############################################
 # Utils - Manifest Processing Helpers
@@ -873,6 +887,7 @@ def _id_from_matte_name(name):
         return single_precision(float(name[1:-1]))
     else:
         return mm3hash_float(name)
+
 
 def _get_knob_channel_value(knob, recursive_mode=None):
     # todo(jonah): Why is this in a try/except? 
@@ -900,7 +915,7 @@ def _get_knob_channel_value(knob, recursive_mode=None):
             for sub_channel in ['.red', '.blue']:
                 channel = layer + sub_channel
                 selected_id = upstream_node.sample(channel, bbox[0], bbox[1])
-                
+
                 if recursive_mode == "add":
                     if selected_id == 0.0:
                         # Seen bg twice?  Select bg.
@@ -910,17 +925,17 @@ def _get_knob_channel_value(knob, recursive_mode=None):
                         # Skip bg the first time
                         saw_bg = True
 
-                    elif not selected_id in id_list:
+                    elif selected_id not in id_list:
                         return selected_id
 
                 elif recursive_mode == "remove":
-                    if selected_id == 0.0:                        
+                    if selected_id == 0.0:
                         # Seen bg twice?  Select bg.
                         if saw_bg:
                             return 0.0
-                        
+
                         # Skip bg the first time
-                        saw_bg = True         
+                        saw_bg = True
 
                     elif selected_id in id_list:
                         return selected_id
@@ -929,10 +944,9 @@ def _get_knob_channel_value(knob, recursive_mode=None):
 
                     # Non-recursive.  Just return the first id found.
                     return selected_id
-    
+
     except:
         return 0.0
-
 
 
 #############################################
@@ -957,13 +971,13 @@ def _encode_csv(iterable_items):
             cleaned = ""
             for char in item:
                 if char in need_escape_chars:
-                    cleaned +=( '\\%s' % char )
+                    cleaned += ('\\%s' % char)
                 else:
                     cleaned += char
         else:
             cleaned = item
         if need_quotes:
-            cleaned_items.append('"%s"'%cleaned)
+            cleaned_items.append('"%s"' % cleaned)
         else:
             cleaned_items.append(cleaned)
     result = ", ".join(cleaned_items)
@@ -973,8 +987,8 @@ def _encode_csv(iterable_items):
 def _decode_csv(input_str):
     """ Decodes CSVs into a list of strings. """
     import csv
-    reader = csv.reader([input_str], quotechar='"', delimiter=',', escapechar="\\", 
-        doublequote=False, quoting=csv.QUOTE_ALL, skipinitialspace=True);
+    reader = csv.reader([input_str], quotechar='"', delimiter=',', escapechar="\\",
+                        doublequote=False, quoting=csv.QUOTE_ALL, skipinitialspace=True)
     result = []
     for row in reader:
         result += row
@@ -987,17 +1001,18 @@ def get_mattelist_as_set(gizmo):
     result = set()
     for item in raw_list:
         item = item.encode("utf-8") if type(item) is unicode else str(item)
-        result.add(item) 
+        result.add(item)
     return result
 
 
 def set_mattelist_from_set(gizmo, matte_items):
-    " Creates a CSV matte list. "
+    """ Creates a CSV matte list. """
     matte_names_list = list(matte_items)
     matte_names_list.sort(key=lambda x: x.lower())
     matte_list_str = _encode_csv(matte_names_list)
     matte_list_str = matte_list_str.replace("\\", "\\\\")
     gizmo.knob("matteList").setValue(matte_list_str)
+
 
 def _matteList_modify(gizmo, name, remove):
     def _matteList_set_add(name, matte_names):
@@ -1005,7 +1020,7 @@ def _matteList_modify(gizmo, name, remove):
 
     def _matteList_set_remove(name, matte_names):
         if name in matte_names:
-            matte_names.remove(name) # the simple case
+            matte_names.remove(name)  # the simple case
         elif name.startswith('<') and name.endswith('>') and _is_number(name[1:-1]):
             # maybe it was selected by name before, but is being removed by number
             # (manifest was working, now it doesn't)
@@ -1019,12 +1034,11 @@ def _matteList_modify(gizmo, name, remove):
             # (manifest was broken, now it works)
             num_str = "<%s>" % mm3hash_float(name)
             if num_str in matte_names:
-                matte_names.remove(num_str) # the simple case
-
+                matte_names.remove(num_str)  # the simple case
 
     if not name or gizmo.knob("stopAutoUpdate").getValue() == 1.0:
         return
-    
+
     matte_names = get_mattelist_as_set(gizmo)
     if remove:
         _matteList_set_remove(name, matte_names)
@@ -1061,7 +1075,7 @@ def decryptomatte_nodes(nodes, ask):
         return
 
     if not ask or nuke.ask(('Replace %s Cryptomatte gizmos with expression nodes? '
-        'Replaced Gizmos will be disabled and selected.') % len(gizmos)):
+                            'Replaced Gizmos will be disabled and selected.') % len(gizmos)):
 
         for gizmo in gizmos:
             _decryptomatte(gizmo)
@@ -1105,13 +1119,13 @@ def _decryptomatte(gizmo):
 
     start_dot = nuke.nodes.Dot(inputs=[gizmo])
     expr_node = nuke.nodes.Expression(
-        inputs=[start_dot], channel0="red", expr0=expr_setting, 
-        name="CryptExpr_%s"%matte_name, disable=disabled_setting
+        inputs=[start_dot], channel0="red", expr0=expr_setting,
+        name="CryptExpr_%s" % matte_name, disable=disabled_setting
     )
     new_nodes = [start_dot, expr_node]
 
     for knob_name in GIZMO_CHANNEL_KNOBS:
-        expr_node.addKnob(nuke.nuke.Channel_Knob(knob_name, "none") )
+        expr_node.addKnob(nuke.nuke.Channel_Knob(knob_name, "none"))
         expr_node.knob(knob_name).setValue(gizmo.knob(knob_name).value())
         expr_node.knob(knob_name).setVisible(False)
 
@@ -1120,27 +1134,27 @@ def _decryptomatte(gizmo):
     if rm_channels_setting:
         channels2 = output_setting if output_setting != "alpha" else ""
         shufflecopy_main = nuke.nodes.Remove(
-            inputs=[shufflecopy_main], operation="keep", channels="rgba", 
-            channels2=channels2, name="CryptRemove_%s"%matte_name, 
+            inputs=[shufflecopy_main], operation="keep", channels="rgba",
+            channels2=channels2, name="CryptRemove_%s" % matte_name,
             disable=disabled_setting
         )
         new_nodes.append(shufflecopy_main)
 
     if unpremult_setting:
         shufflecopy_side = nuke.nodes.Unpremult(
-            inputs=[shufflecopy_side], channels="red", 
-            name="CryptUnpremul_%s"%matte_name, disable=disabled_setting
+            inputs=[shufflecopy_side], channels="red",
+            name="CryptUnpremul_%s" % matte_name, disable=disabled_setting
         )
         new_nodes.append(shufflecopy_side)
 
     shufflecopy = nuke.nodes.ShuffleCopy(
         inputs=[shufflecopy_main, shufflecopy_side], out="rgb",
         alpha="alpha2", red2="red", green2="red", white="red", black="red",
-        out2=output_setting, name="CryptShufCpy_%s"%matte_name,
+        out2=output_setting, name="CryptShufCpy_%s" % matte_name,
         disable=disabled_setting
     )
     new_nodes.append(shufflecopy)
-    
+
     if matte_only_setting:
         if output_setting != "alpha":
             shufflecopy.knob("out").setValue("rgba")

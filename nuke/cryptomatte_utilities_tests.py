@@ -28,7 +28,7 @@ directory can be defined using the environment variable below. Otherwise, they a
 relative to this file.
 """
 SAMPLES_IMAGES_DIR_ENVIRON = "CRYPTOMATTE_TESTING_SAMPLES"
-global CRYPTOMATTETEST_SKIP_CLEANUP_ON_FAILURE
+
 CRYPTOMATTETEST_SKIP_CLEANUP_ON_FAILURE = False
 
 
@@ -103,7 +103,6 @@ class CryptoHashing(unittest.TestCase):
 # Nuke tests
 #############################################
 
-global g_cancel_nuke_testing
 g_cancel_nuke_testing = False
 
 
@@ -159,7 +158,7 @@ class CryptomatteNodePasting(unittest.TestCase):
     This test tests for it. 
     """
 
-    expected_error_prefix =  "On paste, node lost connection to"
+    expected_error_prefix = "On paste, node lost connection to"
 
     def test_paste_with_channelmerge(self):
         """Tests this bug has been fixed."""
@@ -272,7 +271,6 @@ class CryptomatteNukeTests(unittest.TestCase):
     and many tests in the same class is the lesser evil. 
     """
 
-    @classmethod
     def setUpClass(self):
         import nuke
         import os
@@ -286,7 +284,7 @@ class CryptomatteNukeTests(unittest.TestCase):
         for file_path in [obj_path, asset_path, material_path, sidecar_path]:
             if not os.path.isfile(file_path):
                 raise IOError(
-                    ("Could not find: %s. Sample image dir can be defined env variable, %s") %
+                    "Could not find: %s. Sample image dir can be defined env variable, %s" %
                     (file_path, SAMPLES_IMAGES_DIR_ENVIRON))
 
         self.read_obj = nuke.nodes.Read(file=obj_path)
@@ -297,7 +295,6 @@ class CryptomatteNukeTests(unittest.TestCase):
         self.constant = nuke.nodes.Constant(color=0.5)
         self.set_canceled(False)
 
-    @classmethod
     def tearDownClass(self):
         import nuke
         if self.canceled():
@@ -308,12 +305,10 @@ class CryptomatteNukeTests(unittest.TestCase):
         nuke.delete(self.read_sidecar)
         nuke.delete(self.constant)
 
-    @classmethod
     def set_canceled(self, canceled):
         global g_cancel_nuke_testing
         g_cancel_nuke_testing = canceled
 
-    @classmethod
     def canceled(self):
         global g_cancel_nuke_testing
         return g_cancel_nuke_testing
@@ -328,7 +323,6 @@ class CryptomatteNukeTests(unittest.TestCase):
             return False
 
     def setUp(self):
-        import nuke
         if self.canceled():
             self.skipTest("Remaining tests canceled.")
             return
@@ -508,7 +502,7 @@ class CryptomatteNukeTests(unittest.TestCase):
     def _setup_test_layer_forced_update_func(self, gizmo):
         gizmo.setInput(0, self.read_obj_dot)
         self.read_obj_dot.setInput(0, self.read_asset)
-        if (gizmo.knob("cryptoLayer").value() != "uCryptoObject"):
+        if gizmo.knob("cryptoLayer").value() != "uCryptoObject":
             raise RuntimeError("Upstream changes now trigger updates, test is invalid %s " %
                                gizmo.knob("cryptoLayer").value())
 
@@ -545,8 +539,9 @@ class CryptomatteNukeTests(unittest.TestCase):
         self.key_on_image(self.floweredge_pkr)
         self.assertMatteList("heroflower", msg or "Hero flower not selected on partial pixels. ")
         self.assertEqual(
-            self.gizmo.knob("expression").getValue(), self.heroflower_expr, msg or
-            "Hero flower expression was wrong. ")
+            self.gizmo.knob("expression").getValue(),
+            self.heroflower_expr,
+            msg or "Hero flower expression was wrong. ")
 
     def test_keying_partial_black(self):
         self._test_keying_partial_black()
@@ -577,7 +572,6 @@ class CryptomatteNukeTests(unittest.TestCase):
         self.assertEqual(self.gizmo.knob("expression").getValue(), "", "Clear() failed. ")
 
     def test_clear_button(self):
-        import cryptomatte_utilities as cu
         self._test_keying_partial_black()
         self.gizmo.knob("clear").execute()
         self.assertMatteList("", "Clear button failed. ")
@@ -713,7 +707,6 @@ class CryptomatteNukeTests(unittest.TestCase):
         Tests what happens with matte lists if you have a name matte list, but pick without a 
         manifest, and vice version. It should be smart enough to not create anything redundant. 
         """
-        import nuke
         numeric_mlist_bunny = "<3.36000126251e-27>"
         numeric_mlist_set = "<7.36562399642e+18>"
         numeric_mlist_both = "<3.36000126251e-27>, <7.36562399642e+18>"
@@ -779,7 +772,7 @@ class CryptomatteNukeTests(unittest.TestCase):
             for x in xrange(width):
                 m.update(str(node.sample(channel, x, y)))
         for y_index in xrange(num_scanlines):
-            y = (float(y_index) + 0.5) * height / (num_scanlines)
+            y = (float(y_index) + 0.5) * height / num_scanlines
             for x in xrange(width):
                 m.update(str(node.sample(channel, x, y)))
         return m.hexdigest()
@@ -820,7 +813,7 @@ class CryptomatteNukeTests(unittest.TestCase):
         self.assertEqual(correct_hash, decryptomatte_hash,
                          "Decryptomatte in a custom channel mismatch.")
 
-    def test_decrypto_matteonly_unpremul(self):
+    def test_decrypto_matteonly_unpremult(self):
         import cryptomatte_utilities as cu
         custom_layer = "uCryptoAsset"  # guaranteed to already exist
 
@@ -874,7 +867,7 @@ class CryptomatteNukeTests(unittest.TestCase):
         import cryptomatte_utilities as cu
         for channel in cu.GIZMO_CHANNEL_KNOBS:
             self.assertTrue(
-                self.gizmo.knob(channel).Class() in set(["Channel_Knob", "ChannelMask_Knob"]),
+                self.gizmo.knob(channel).Class() in {"Channel_Knob", "ChannelMask_Knob"},
                 "Input knob was not a channel knob, which causes failed renders "
                 "due to expression errors on load. (%s)" % self.gizmo.knob(channel).Class())
 
@@ -883,7 +876,7 @@ class CryptomatteNukeTests(unittest.TestCase):
         encrypt = self.tempNode("Encryptomatte")
         for channel in cu.GIZMO_REMOVE_CHANNEL_KNOBS + cu.GIZMO_ADD_CHANNEL_KNOBS:
             self.assertTrue(
-                encrypt.knob(channel).Class() in set(["Channel_Knob", "ChannelMask_Knob"]),
+                encrypt.knob(channel).Class() in {"Channel_Knob", "ChannelMask_Knob"},
                 "Input knob was not a channel knob, which causes failed renders "
                 "due to expression errors on load. (%s)" % encrypt.knob(channel).Class())
 
@@ -965,7 +958,6 @@ class CryptomatteNukeTests(unittest.TestCase):
         """ Tests that when setting up layers, entering the name before pressing "setup layers"
         doesn't spew python errors but fails gracefully. 
         """
-        import cryptomatte_utilities as cu
         encryptomatte = self.tempNode("Encryptomatte", matteName="triangle")
         encryptomatte.knob("setupLayers").setValue(True)
         encryptomatte.knob("cryptoLayer").setValue("customCrypto")
@@ -1053,22 +1045,19 @@ class CryptomatteNukeTests(unittest.TestCase):
         # todo(jfriedman): figure out whether this is our bug or just a quirk of Nuke
         if hasattr(self, "skipTest"):
             self.skipTest("Auto failed this test to stop it wrecking the rest of the tests")
-        return  # just pass tests on nuke 7 (python 2.6)
-        """
-        There's something wrong here and I think it's a nuke bug. 
+            return  # just pass tests on nuke 7 (python 2.6)
 
-        After setting mergeOperation to "under", this not causes the rest of the tests to fail. 
-        After this, nothing can sample values off any image anymore. This condition is detected in 
-        teardown and cancels the rest of the tests. 
+        # There's something wrong here and I think it's a nuke bug.
+        #
+        # After setting mergeOperation to "under", this not causes the rest of the tests to fail.
+        # After this, nothing can sample values off any image anymore. This condition is detected in
+        # teardown and cancels the rest of the tests.
+        #
+        # This was the same test as test_encrypt_roundtrip (the setup is the same), but because
+        # of the strange issue I've broken this out.
 
-        This was the same test as test_encrypt_roundtrip (the setup is the same), but because
-        of the strange issue I've broken this out. 
-        """
-
-        import cryptomatte_utilities as cu
         roto = self._setup_rotomask()
         keysurf_hash = self._scansample(self.gizmo, None, "blue", num_scanlines=8)
-        roto_hash = self._scansample(roto, None, "alpha", num_scanlines=8)
 
         encryptomatte = self.tempNode(
             "Encryptomatte", inputs=[self.gizmo, roto], matteName="triangle")
@@ -1076,14 +1065,14 @@ class CryptomatteNukeTests(unittest.TestCase):
             "Cryptomatte", inputs=[encryptomatte], matteList="triangle")
 
         mod_keysurf_hash = self._scansample(second_cryptomatte, None, "blue", num_scanlines=8)
-        """
-        FOR SOME REASON the following lines causes the rest of testing to fail. 
-        """
+
+        # FOR SOME REASON the following lines causes the rest of testing to fail.
+
         encryptomatte.knob("mergeOperation").setValue("under")
         under_keysurf_hash = self._scansample(second_cryptomatte, None, "blue", num_scanlines=8)
-        """   
-        The following assertions will pass, but fail in teardown as nothing else can be sampled. 
-        """
+
+        # The following assertions will pass, but fail in teardown as nothing else can be sampled.
+
         self.assertNotEqual(under_keysurf_hash, mod_keysurf_hash,
                             "Under mode did not change preview image from over. ")
         self.assertNotEqual(under_keysurf_hash, keysurf_hash,
@@ -1183,7 +1172,7 @@ def run_tests(test_cases, test_filter="", failfast=False):
 
     pv = sys.version_info
     if "%s.%s" % (pv[0], pv[1]) == "2.6":
-        runner = unittest.TextTestRunner(verbosity=2) # nuke 7 again..
+        runner = unittest.TextTestRunner(verbosity=2)  # nuke 7 again..
     else:
         runner = unittest.TextTestRunner(verbosity=2, failfast=failfast)
     result = runner.run(suite)
