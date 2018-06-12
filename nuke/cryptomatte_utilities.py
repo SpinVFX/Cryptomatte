@@ -6,6 +6,10 @@
 #
 import nuke
 import struct
+try:
+    from PySide2 import QtCore, QtWidgets
+except ImportError:
+    from PySide import QtCore, QtGui as QtWidgets
 
 __version__ = "1.2.0"
 
@@ -442,6 +446,14 @@ def cryptomatte_knob_changed_event(node=None, knob=None):
         cinfo = CryptomatteInfo(node)
         _update_cryptomatte_gizmo(node, cinfo, True)
 
+    elif knob.name() == "shotManifest":
+        # Load the manifest into the Manifest Tree Widget
+        widget = node['manifestTree'].getObject()
+        path = knob.value()
+        data = load_json_manifest_as_tree(path)
+        widget.populate(data)
+
+
 
 def encryptomatte_knob_changed_event(node=None, knob=None):
     if knob.name() in ["matteName", "cryptoLayerLock"]:
@@ -703,6 +715,36 @@ def encryptomatte_add_manifest_id():
     return existing_items
 
 
+def parse_manifest_to_tree(crypto_data):
+    def recursive_crypto_parser(result, parts, _value):
+        if parts:
+            recursive_crypto_parser(result.setdefault(parts[0], {} if len(parts) > 1 else _value), parts[1:], _value)
+        return result
+
+    parsed = {}
+    for manifest_entry, hex in crypto_data.iteritems():
+        if manifest_entry.startswith('/'):
+            manifest_entry = manifest_entry[1:]
+        parsed = recursive_crypto_parser(parsed, manifest_entry.split('/'), hex)
+    return parsed
+
+
+def load_json_manifest_as_tree(path):
+    """ Converts a JSON file (containing manifest information) into a nested dict representing a tree view.
+
+    :param path: Path to JSON file.
+    :return:
+    """
+    import json
+    import os
+    shot_manifest = {}
+    if path[-4:] == 'json' and os.path.isfile(path):
+        with open(path) as data:
+            shot_manifest = json.load(data)
+
+    return parse_manifest_to_tree(shot_manifest)
+
+
 #############################################
 # Utils - Unload Manifest
 #############################################
@@ -950,7 +992,7 @@ def _get_knob_channel_value(knob, recursive_mode=None):
 
 
 #############################################
-# Utils - Comma seperated list processing
+# Utils - Comma separated list processing
 #############################################
 
 
@@ -1168,3 +1210,162 @@ def _decryptomatte(gizmo):
     for node, inputID in connect_to:
         node.setInput(inputID, shufflecopy)
     return new_nodes
+
+
+#############################################
+# QT Widget for Tree View
+#############################################
+    #
+    # elif knob.name() == "shotManifest":
+    #     # Load the manifest into the Manifest Tree Widget
+    #     widget = node['manifestTree'].getObject()
+    #     path = knob.value()
+    #     data = load_json_manifest_as_tree(path)
+    #     widget.populate(data)
+
+# TODO: This function is probably redundant, find the equivalent in the original crypto code.
+def hex_to_float(hex_value):
+    return "<{}>".format(struct.unpack('<f', struct.pack('<I', int(hex_value, 16)))[0])
+
+
+class TreeView(QtWidgets.QWidget):
+    def __init__(self, nuke_node=None, parent=None):
+        super(TreeView, self).__init__(parent=parent)
+        # self variables
+        self.node = nuke_node
+        self.current_selection = ""
+
+        #Layout
+        layout = QtWidgets.QVBoxLayout()
+        self.setLayout(layout)
+
+        # Tree
+        self.tree = QtWidgets.QTreeWidget()
+        self.tree.setHeaderHidden(True)
+        self.tree.setUniformRowHeights(True)
+        self.tree.setSelectionMode(self.tree.ExtendedSelection)
+        layout.addWidget(self.tree)
+
+        # Buttons
+        button_box = QtWidgets.QHBoxLayout()
+        layout.addLayout(button_box)
+        plus_button = QtWidgets.QPushButton("+")
+        set_button = QtWidgets.QPushButton("set")
+        minus_button = QtWidgets.QPushButton("-")
+        button_box.addWidget(plus_button)
+        button_box.addWidget(set_button)
+        button_box.addWidget(minus_button)
+
+        if self.node and self.node['shotManifest'].value():
+            data = load_json_manifest_as_tree(self.node['shotManifest'].value())
+            self.populate(data)
+
+        # Connect Slot
+        self.tree.clicked.connect(self.item_clicked)
+        self.tree.itemSelectionChanged.connect(self.selection_changed)
+        plus_button.clicked.connect(self.add_to_selection)
+        set_button.clicked.connect(self.commit_selection)
+        minus_button.clicked.connect(self.remove_from_selection)
+
+    def populate(self, nested_dict, parent_item=None):
+        """ Fills the tree view based on a dictionary (recursive function)
+
+        :param nested_dict: A nested dictionary to represent as a tree view
+        :type nested_dict: dict
+        :param parent_item: The parent QTreeWidgetItem under which to add the children.
+        :type parent_item: QtWidgets.QTreeWidgetItem
+        :return:
+        """
+        if parent_item is None:
+            parent_item = self.tree.invisibleRootItem()
+            self.tree.clear()
+
+        if isinstance(nested_dict, dict):
+            for key, value in nested_dict.iteritems():
+                child_item = QtWidgets.QTreeWidgetItem()
+                child_item.setText(0, key)
+                item_data = None if isinstance(value, dict) else value
+                child_item.setData(0, QtCore.Qt.UserRole, item_data)
+                parent_item.addChild(child_item)
+                self.populate(value, child_item)
+                child_item.setExpanded(True)
+
+    def item_clicked(self, item_index):
+        """ Triggered when an item is clicked in the tree view
+
+        :param item_index:
+        :return:
+        """
+        # print item_index.data()
+        clicked = self.tree.itemFromIndex(item_index)
+        self.tree.blockSignals(True)
+        self.change_children_selection(clicked, clicked.isSelected())
+        self.tree.blockSignals(False)
+        self.preview_selection()
+
+    def change_children_selection(self, item, selected=True):
+        """ Recursively select or deselect all children of an item.
+
+        :param item:
+        :param selected:
+        :return:
+        """
+        child_count = item.childCount()
+        for index in range(child_count):
+            this_item = item.child(index)
+            this_item.setSelected(selected)
+            self.change_children_selection(this_item, selected)
+
+    def selection_changed(self):
+        """ Used as a fix to force refresh on deselection happening by clicking outside the tree"""
+        if not self.tree.selectedItems():
+            self.preview_selection()
+
+    def preview_selection(self):
+        id_list = [selected_item.data(0, QtCore.Qt.UserRole) for selected_item in self.tree.selectedItems()]
+        matte_list = [hex_to_float(matte_id) for matte_id in id_list if matte_id]
+        mattes = ", ".join(matte_list)
+
+        # self.current_selection = mattes
+        #
+        # if self.node:
+        #     with self.node:
+        #         # Do the nuke group internal stuff here
+        #         select_crypto = nuke.toNode("CryptoSelectPreview")
+        #         select_crypto["matteList"].setValue(mattes)
+
+    def add_to_selection(self):
+        """
+        Add the current selection to the committed selection
+        """
+        self.commit_selection(mode="+")
+
+    def remove_from_selection(self):
+        """
+        Remove the current selection from the committed selection
+        """
+        self.commit_selection(mode="-")
+
+    def commit_selection(self, mode="="):
+        """ Commit the current selection
+
+        :param mode: Selection mode: "+" or "-" or "="
+        """
+        # if self.node:
+        #     with self.node:
+        #         # Do the nuke group internal stuff here
+        #         final_crypto = nuke.toNode("Cryptomatte1")
+        #         if mode == "=":
+        #             new_selection = self.current_selection
+        #         else:
+        #             committed_selection = final_crypto["matteList"].value()
+        #             selection_set = set(committed_selection.split(", "))
+        #             current_set = set(self.current_selection.split(", "))
+        #             new_selection_set = (selection_set | current_set) if mode == '+' else (selection_set - current_set)
+        #             new_selection = ', '.join(list(new_selection_set))
+        #         final_crypto["matteList"].setValue(new_selection)
+        self.tree.clearSelection()
+
+    def makeUI(self):
+        """Method required by nuke to display the widget as a knob"""
+        return self
