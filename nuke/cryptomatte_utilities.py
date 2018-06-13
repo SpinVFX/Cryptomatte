@@ -421,9 +421,8 @@ def cryptomatte_knob_changed_event(node=None, knob=None):
         if ID_value == 0.0:
             return
         cinfo = CryptomatteInfo(node)
-        keyed_object = cinfo.id_to_name(ID_value) or "<%s>" % ID_value
         node.knob("pickerRemove").setValue([0] * 8)
-        _matteList_modify(node, keyed_object, False)
+        _matteList_modify(node, ID_value, False)
         _update_cryptomatte_gizmo(node, cinfo)
 
     elif knob.name() == "pickerRemove":
@@ -431,9 +430,8 @@ def cryptomatte_knob_changed_event(node=None, knob=None):
         if ID_value == 0.0:
             return
         cinfo = CryptomatteInfo(node)
-        keyed_object = cinfo.id_to_name(ID_value) or "<%s>" % ID_value
         node.knob("pickerAdd").setValue([0] * 8)
-        _matteList_modify(node, keyed_object, True)
+        _matteList_modify(node, ID_value, True)
         _update_cryptomatte_gizmo(node, cinfo)
 
     elif knob.name() == "matteList":
@@ -824,19 +822,9 @@ def _is_number(s):
 
 
 def _set_expression(gizmo, cryptomatte_channels, temp=False):
-    ID_list = []
+    id_list = list(get_mattelist_as_set(gizmo, temp))
 
-    matte_list = get_mattelist_as_set(gizmo, temp)
-
-    for item in matte_list:
-        if item.startswith("<") and item.endswith(">"):
-            numstr = item[1:-1]
-            if _is_number(numstr):
-                ID_list.append(single_precision(float(numstr)))
-        else:
-            ID_list.append(mm3hash_float(item))
-
-    expression = _build_extraction_expression(cryptomatte_channels, ID_list)
+    expression = _build_extraction_expression(cryptomatte_channels, id_list)
     if not temp:
         gizmo.knob("expression").setValue(expression)
     else:
@@ -962,8 +950,7 @@ def _get_knob_channel_value(knob, recursive_mode=None):
         if recursive_mode is None:
             id_list = []
         else:
-            matte_list = get_mattelist_as_set(node)
-            id_list = map(_id_from_matte_name, matte_list)
+            id_list = list(get_mattelist_as_set(node))
 
         saw_bg = False
 
@@ -1057,18 +1044,23 @@ def _decode_csv(input_str):
 
 
 def get_mattelist_as_set(gizmo, temp=False):
+    """ Get the matte list as a set of float values. """
     matte_list = gizmo.knob("tempMatteList").getValue() if temp else gizmo.knob("matteList").getValue()
     raw_list = _decode_csv(matte_list)
     result = set()
     for item in raw_list:
         item = item.encode("utf-8") if type(item) is unicode else str(item)
-        result.add(item)
+        if item.startswith('<') and item.endswith('>') and _is_number(item[1:-1]):
+            item_id = single_precision(float(item[1:-1]))
+        else:
+            item_id = mm3hash_float(item)
+        result.add(item_id)
     return result
 
 
 def set_mattelist_from_set(gizmo, matte_items):
     """ Creates a CSV matte list. """
-    matte_names_list = list(matte_items)
+    matte_names_list = ['<%s>' % item for item in matte_items]  # TODO: Attempt to get the item name instead.
     matte_names_list.sort(key=lambda x: x.lower())
     matte_list_str = _encode_csv(matte_names_list)
     matte_list_str = matte_list_str.replace("\\", "\\\\")
@@ -1076,35 +1068,18 @@ def set_mattelist_from_set(gizmo, matte_items):
 
 
 def _matteList_modify(gizmo, name, remove):
-    def _matteList_set_add(name, matte_names):
-        matte_names.add(name)
-
-    def _matteList_set_remove(name, matte_names):
-        if name in matte_names:
-            matte_names.remove(name)  # the simple case
-        elif name.startswith('<') and name.endswith('>') and _is_number(name[1:-1]):
-            # maybe it was selected by name before, but is being removed by number
-            # (manifest was working, now it doesn't)
-            num = single_precision(float(name[1:-1]))
-            for existing_name in matte_names:
-                if mm3hash_float(existing_name) == num:
-                    matte_names.remove(existing_name)
-                    break
-        else:
-            # maybe it was selected by number before, but is being removed by name
-            # (manifest was broken, now it works)
-            num_str = "<%s>" % mm3hash_float(name)
-            if num_str in matte_names:
-                matte_names.remove(num_str)  # the simple case
 
     if not name or gizmo.knob("stopAutoUpdate").getValue() == 1.0:
         return
 
+    if not isinstance(name, set):
+        name = {name}
+
     matte_names = get_mattelist_as_set(gizmo)
     if remove:
-        _matteList_set_remove(name, matte_names)
+        matte_names -= name
     else:
-        _matteList_set_add(name, matte_names)
+        matte_names |= name
     set_mattelist_from_set(gizmo, matte_names)
 
 
@@ -1365,14 +1340,12 @@ class TreeView(QtWidgets.QWidget):
         """
         if self.node:
             # Do the nuke group internal stuff here
-            matte_names = set(self.current_selection.split(", "))
+            matte_names = get_mattelist_as_set(self.node, True)
             if mode == "=":
                 set_mattelist_from_set(self.node, matte_names)
             else:
                 remove = mode == "-"
-                # TODO: This is slow, there must be a better way using set operations.
-                for name in matte_names:
-                    _matteList_modify(self.node, name, remove)
+                _matteList_modify(self.node, matte_names, remove)
 
         self.tree.clearSelection()
 
