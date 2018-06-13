@@ -107,6 +107,10 @@ def mm3hash_float(name):
     return struct.unpack('<f', packed)[0]
 
 
+def hex_to_float(hex_value):
+    return struct.unpack('<f', struct.pack('<I', int(hex_value, 16)))[0]
+
+
 def single_precision(float_in):
     import array
     return array.array("f", [float_in])[0]
@@ -438,6 +442,15 @@ def cryptomatte_knob_changed_event(node=None, knob=None):
         node.knob("pickerRemove").setValue([0] * 8)
         node.knob("pickerAdd").setValue([0] * 8)
 
+    elif knob.name() == "tempMatteList":
+        cinfo = CryptomatteInfo(node)
+        if not cinfo.is_valid():
+            return
+        cryptomatte_channels = cinfo.get_channels()
+        if not cryptomatte_channels:
+            return
+        _set_expression(node, cryptomatte_channels, temp=True)
+
     elif knob.name() in ["previewMode", "previewEnabled"]:
         cinfo = CryptomatteInfo(node)
         _update_cryptomatte_gizmo(node, cinfo)
@@ -449,6 +462,8 @@ def cryptomatte_knob_changed_event(node=None, knob=None):
     elif knob.name() == "shotManifest":
         # Load the manifest into the Manifest Tree Widget
         widget = node['manifestTree'].getObject()
+        if not widget:
+            return
         path = knob.value()
         data = load_json_manifest_as_tree(path)
         widget.populate(data)
@@ -808,10 +823,10 @@ def _is_number(s):
         return False
 
 
-def _set_expression(gizmo, cryptomatte_channels):
+def _set_expression(gizmo, cryptomatte_channels, temp=False):
     ID_list = []
 
-    matte_list = get_mattelist_as_set(gizmo)
+    matte_list = get_mattelist_as_set(gizmo, temp)
 
     for item in matte_list:
         if item.startswith("<") and item.endswith(">"):
@@ -822,7 +837,11 @@ def _set_expression(gizmo, cryptomatte_channels):
             ID_list.append(mm3hash_float(item))
 
     expression = _build_extraction_expression(cryptomatte_channels, ID_list)
-    gizmo.knob("expression").setValue(expression)
+    if not temp:
+        gizmo.knob("expression").setValue(expression)
+    else:
+        gizmo.knob("tempExpression").setValue(expression)
+
 
 
 def _build_condition(condition, IDs):
@@ -1037,8 +1056,8 @@ def _decode_csv(input_str):
     return result
 
 
-def get_mattelist_as_set(gizmo):
-    matte_list = gizmo.knob("matteList").getValue()
+def get_mattelist_as_set(gizmo, temp=False):
+    matte_list = gizmo.knob("tempMatteList").getValue() if temp else gizmo.knob("matteList").getValue()
     raw_list = _decode_csv(matte_list)
     result = set()
     for item in raw_list:
@@ -1223,10 +1242,6 @@ def _decryptomatte(gizmo):
     #     data = load_json_manifest_as_tree(path)
     #     widget.populate(data)
 
-# TODO: This function is probably redundant, find the equivalent in the original crypto code.
-def hex_to_float(hex_value):
-    return "<{}>".format(struct.unpack('<f', struct.pack('<I', int(hex_value, 16)))[0])
-
 
 class TreeView(QtWidgets.QWidget):
     def __init__(self, nuke_node=None, parent=None):
@@ -1323,16 +1338,13 @@ class TreeView(QtWidgets.QWidget):
 
     def preview_selection(self):
         id_list = [selected_item.data(0, QtCore.Qt.UserRole) for selected_item in self.tree.selectedItems()]
-        matte_list = [hex_to_float(matte_id) for matte_id in id_list if matte_id]
+        matte_list = ["<{}>".format(hex_to_float(matte_id)) for matte_id in id_list if matte_id]
         mattes = ", ".join(matte_list)
 
-        # self.current_selection = mattes
-        #
-        # if self.node:
-        #     with self.node:
-        #         # Do the nuke group internal stuff here
-        #         select_crypto = nuke.toNode("CryptoSelectPreview")
-        #         select_crypto["matteList"].setValue(mattes)
+        self.current_selection = mattes
+
+        if self.node:
+            self.node["tempMatteList"].setValue(mattes)
 
     def add_to_selection(self):
         """
@@ -1351,19 +1363,17 @@ class TreeView(QtWidgets.QWidget):
 
         :param mode: Selection mode: "+" or "-" or "="
         """
-        # if self.node:
-        #     with self.node:
-        #         # Do the nuke group internal stuff here
-        #         final_crypto = nuke.toNode("Cryptomatte1")
-        #         if mode == "=":
-        #             new_selection = self.current_selection
-        #         else:
-        #             committed_selection = final_crypto["matteList"].value()
-        #             selection_set = set(committed_selection.split(", "))
-        #             current_set = set(self.current_selection.split(", "))
-        #             new_selection_set = (selection_set | current_set) if mode == '+' else (selection_set - current_set)
-        #             new_selection = ', '.join(list(new_selection_set))
-        #         final_crypto["matteList"].setValue(new_selection)
+        if self.node:
+            # Do the nuke group internal stuff here
+            matte_names = set(self.current_selection.split(", "))
+            if mode == "=":
+                set_mattelist_from_set(self.node, matte_names)
+            else:
+                remove = mode == "-"
+                # TODO: This is slow, there must be a better way using set operations.
+                for name in matte_names:
+                    _matteList_modify(self.node, name, remove)
+
         self.tree.clearSelection()
 
     def makeUI(self):

@@ -45,7 +45,8 @@ Gizmo {
  addUserKnob {20 TreeView}
  addUserKnob {2 shotManifest l "Shot Manifest" t "You can load a JSON file manifest to view it in the tree view below."}
  addUserKnob {52 manifestTree l "" +STARTLINE T cryptomatte_utilities.TreeView(nuke.thisNode()) +STARTLINE}
- addUserKnob {1 tempMatteList +INVISIBLE}
+ addUserKnob {41 tempExpression T Expression_tempkey.expr0 +DO_NOT_WRITE +INVISIBLE}
+ addUserKnob {1 tempMatteList +DO_NOT_WRITE +INVISIBLE}
 
  addUserKnob {20 Advanced}
  addUserKnob {36 ColorKey l "" t "Key an object here to check its name. It will not effect your mattes. " -STARTLINE +HIDDEN}
@@ -96,100 +97,101 @@ Gizmo {
   inputs 0
   name Input1
   xpos -1361
-  ypos -499
+  ypos -583
  }
  Dot {
   name Dot4
   xpos -1327
-  ypos -439
+  ypos -523
  }
-set N13c4bc00 [stack 0]
+set N83366b0 [stack 0]
  Dot {
   name Dot15
   xpos -1093
-  ypos -439
+  ypos -523
  }
-set N13c4b800 [stack 0]
+set N75b3400 [stack 0]
  Dot {
   name Dot1
-  xpos -960
-  ypos -439
+  xpos -669
+  ypos -523
  }
+set N75b7eb0 [stack 0]
  Shuffle {
   red black
   green black
   blue black
   name Shuffle_blackRGB
-  xpos -994
-  ypos -398
+  xpos -703
+  ypos -482
  }
  Expression {
   channel1 none
   channel2 none
   channel3 none
   name Expression_key
-  xpos -994
-  ypos -372
+  xpos -703
+  ypos -456
  }
  Unpremult {
   channels {rgba.red -rgba.green -rgba.blue none}
   name Unpremult_matte
-  xpos -994
-  ypos -340
+  xpos -703
+  ypos -375
   disable {{!parent.unpremultiply}}
  }
-set N13c4a400 [stack 0]
+set N8328110 [stack 0]
  Dot {
   name Dot11
-  xpos -960
-  ypos -142
+  xpos -669
+  ypos -31
  }
-set N13c4a000 [stack 0]
+set N83304e0 [stack 0]
  Dot {
   name Dot2
-  xpos -960
-  ypos -65
+  xpos -669
+  ypos 46
  }
-push $N13c4a000
-push $N13c4bc00
+push $N83304e0
+push $N83366b0
  Dot {
   name Dot8
   xpos -1327
-  ypos -395
+  ypos -479
  }
-set N12b01800 [stack 0]
+set N91fe0b0 [stack 0]
  Dot {
   name Dot9
   xpos -1227
-  ypos -395
+  ypos -479
  }
  Remove {
   operation keep
   channels rgba
   name Remove_channels
   xpos -1261
-  ypos -360
+  ypos -444
  }
-push $N12b01800
+push $N91fe0b0
  Switch {
   inputs 2
   which {{parent.RemoveChannels}}
   name Switch_removeChannels
   xpos -1361
-  ypos -312
+  ypos -396
  }
  Dot {
   name Dot17
   xpos -1327
-  ypos -235
+  ypos -124
  }
-set N12b00c00 [stack 0]
+set N9217ef0 [stack 0]
  Dot {
   name Dot10
   xpos -1327
-  ypos -193
+  ypos -82
  }
-set N12b00800 [stack 0]
+set N921c9d0 [stack 0]
  ShuffleCopy {
   inputs 2
   red red
@@ -198,25 +200,89 @@ set N12b00800 [stack 0]
   alpha red
   name ShuffleCopy_matteOnly
   xpos -1361
-  ypos -146
+  ypos -35
  }
  Dot {
   name Dot16
   xpos -1327
-  ypos -91
+  ypos 20
  }
-push $N13c4a400
-push $N13c4b800
+push $N75b7eb0
+ Dot {
+  name Dot3
+  xpos -885
+  ypos -523
+ }
+ Shuffle {
+  red black
+  green black
+  blue black
+  name Shuffle_blackRGB1
+  xpos -919
+  ypos -482
+ }
+ Expression {
+  channel1 none
+  channel2 none
+  channel3 none
+  name Expression_tempkey
+  xpos -919
+  ypos -456
+ }
+ Unpremult {
+  channels {rgba.red -rgba.green -rgba.blue none}
+  name Unpremult_matte1
+  xpos -919
+  ypos -424
+  disable {{!parent.unpremultiply}}
+ }
+set Na617ae0 [stack 0]
+ Dot {
+  name Dot5
+  tile_color 0xcccccc00
+  xpos -885
+  ypos -218
+ }
+push $N8328110
+push $Na617ae0
+ ChannelMerge {
+  inputs 2
+  A rgba.red
+  operation minus
+  B rgba.red
+  output rgba.red
+  name ChannelMerge1
+  xpos -998
+  ypos -387
+ }
+ Clamp {
+  channels {rgba.red -rgba.green -rgba.blue none}
+  name Clamp1
+  xpos -998
+  ypos -331
+ }
+push $N75b3400
  Shuffle {
   alpha black
   name Shuffle_blackAlpha
   xpos -1127
-  ypos -394
+  ypos -478
  }
  Expression {
   name Expression_preview
   xpos -1127
-  ypos -368
+  ypos -452
+ }
+ Grade {
+  inputs 1+1
+  channels {-rgba.red rgba.green -rgba.blue none}
+  multiply 0
+  add 1
+  black_clamp false
+  maskChannelMask rgba.red
+  name Grade_selection
+  xpos -1127
+  ypos -331
  }
  Grade {
   inputs 1+1
@@ -225,9 +291,9 @@ push $N13c4b800
   add 1
   black_clamp false
   maskChannelMask rgba.red
-  name Grade_selection
+  name Grade_temp_selection
   xpos -1127
-  ypos -340
+  ypos -222
  }
  Grade {
   channels {-rgba.red rgba.green rgba.blue none}
@@ -237,9 +303,9 @@ push $N13c4b800
   maskChannelInput rgba.alpha
   name Grade_highlight
   xpos -1127
-  ypos -302
+  ypos -173
  }
-push $N12b00c00
+push $N9217ef0
  ShuffleCopy {
   inputs 2
   red red
@@ -248,22 +314,22 @@ push $N12b00c00
   alpha alpha2
   name ShuffleCopy_restoreAlpha
   xpos -1127
-  ypos -239
+  ypos -128
  }
-push $N12b00800
+push $N921c9d0
  Switch {
   inputs 2
   which {{parent.previewEnabled}}
   name Switch_preview
   xpos -1127
-  ypos -197
+  ypos -86
  }
  Switch {
   inputs 2
   which {{parent.matteOnly}}
   name Switch_matteOnly
   xpos -1127
-  ypos -95
+  ypos 16
  }
  ShuffleCopy {
   inputs 2
@@ -274,11 +340,11 @@ push $N12b00800
   out alpha
   name ShuffleCopy_embedMask
   xpos -1127
-  ypos -69
+  ypos 42
  }
  Output {
   name Output
   xpos -1127
-  ypos -21
+  ypos 90
  }
 end_group
