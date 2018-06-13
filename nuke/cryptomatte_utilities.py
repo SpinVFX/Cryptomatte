@@ -465,6 +465,7 @@ def cryptomatte_knob_changed_event(node=None, knob=None):
         path = knob.value()
         data = load_json_manifest_as_tree(path)
         widget.populate(data)
+        widget.sort()
 
 
 
@@ -734,11 +735,12 @@ def parse_manifest_to_tree(crypto_data):
             recursive_crypto_parser(result.setdefault(parts[0], {} if len(parts) > 1 else _value), parts[1:], _value)
         return result
 
+    separator = "/"
     parsed = {}
     for manifest_entry, hex in crypto_data.iteritems():
-        if manifest_entry.startswith('/'):
+        if manifest_entry.startswith(separator):
             manifest_entry = manifest_entry[1:]
-        parsed = recursive_crypto_parser(parsed, manifest_entry.split('/'), hex)
+        parsed = recursive_crypto_parser(parsed, manifest_entry.split(separator), hex)
     return parsed
 
 
@@ -1250,6 +1252,7 @@ class TreeView(QtWidgets.QWidget):
         if self.node and self.node['shotManifest'].value():
             data = load_json_manifest_as_tree(self.node['shotManifest'].value())
             self.populate(data)
+            self.sort()
 
         # Connect Slot
         self.tree.clicked.connect(self.item_clicked)
@@ -1279,7 +1282,11 @@ class TreeView(QtWidgets.QWidget):
                 child_item.setData(0, QtCore.Qt.UserRole, item_data)
                 parent_item.addChild(child_item)
                 self.populate(value, child_item)
-                child_item.setExpanded(True)
+                # child_item.setExpanded(True)
+
+    def sort(self):
+        """ Sort the tree view"""
+        self.tree.sortItems(0, QtCore.Qt.AscendingOrder)
 
     def item_clicked(self, item_index):
         """ Triggered when an item is clicked in the tree view
