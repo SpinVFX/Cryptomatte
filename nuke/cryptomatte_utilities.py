@@ -1060,7 +1060,8 @@ def get_mattelist_as_set(gizmo, temp=False):
 
 def set_mattelist_from_set(gizmo, matte_items):
     """ Creates a CSV matte list. """
-    matte_names_list = ['<%s>' % item for item in matte_items]  # TODO: Attempt to get the item name instead.
+    cinfo = CryptomatteInfo(gizmo)
+    matte_names_list = [cinfo.id_to_name(item) or "<%s>" % item for item in matte_items]
     matte_names_list.sort(key=lambda x: x.lower())
     matte_list_str = _encode_csv(matte_names_list)
     matte_list_str = matte_list_str.replace("\\", "\\\\")
